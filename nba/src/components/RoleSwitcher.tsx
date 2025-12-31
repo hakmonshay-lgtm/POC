@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 
 export function RoleSwitcher({ initialRole, initialUserId }: { initialRole: string; initialUserId: string }) {
   const [role, setRole] = useState(initialRole);
@@ -30,8 +31,8 @@ export function RoleSwitcher({ initialRole, initialUserId }: { initialRole: stri
         <option value="legal">Legal</option>
         <option value="analyst">Analyst</option>
       </Select>
-      <input
-        className="h-10 w-[190px] rounded-md border border-zinc-200 bg-white px-3 text-sm outline-none focus:border-zinc-400"
+      <Input
+        className="w-[190px]"
         value={userId}
         onChange={(e) => setUserId(e.target.value)}
         placeholder="User ID"

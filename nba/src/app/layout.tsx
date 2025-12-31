@@ -31,28 +31,31 @@ export default async function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <div className="min-h-screen bg-zinc-50">
-          <div className="border-b border-zinc-200 bg-white">
+        <div className="min-h-screen bg-[var(--background)]">
+          <div className="border-b border-zinc-200/60 bg-[var(--cw-green)]">
             <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
               <div className="flex items-center gap-6">
-                <Link href="/" className="text-sm font-semibold text-zinc-900">
-                  NBA Studio
+                <Link href="/" className="flex items-center gap-2 text-sm font-extrabold tracking-tight text-white">
+                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-white/15 ring-1 ring-white/20">
+                    <span className="text-base leading-none">N</span>
+                  </span>
+                  <span>NBA Studio</span>
                 </Link>
-                <nav className="flex items-center gap-4 text-sm text-zinc-700">
-                  <Link className="hover:text-zinc-900" href="/nbas">
+                <nav className="flex items-center gap-4 text-sm text-white/90">
+                  <Link className="hover:text-white" href="/nbas">
                     NBAs
                   </Link>
-                  <Link className="hover:text-zinc-900" href="/analytics">
+                  <Link className="hover:text-white" href="/analytics">
                     Analytics
                   </Link>
-                  <Link className="hover:text-zinc-900" href="/legal">
+                  <Link className="hover:text-white" href="/legal">
                     Legal
                   </Link>
                 </nav>
               </div>
               <div className="flex items-center gap-3">
-                <div className="text-xs text-zinc-600">
-                  Role: <span className="font-medium text-zinc-900">{session.role}</span>
+                <div className="text-xs text-white/90">
+                  Role: <span className="font-semibold text-white">{session.role}</span>
                 </div>
                 <RoleSwitcher initialRole={session.role} initialUserId={session.userId} />
               </div>
