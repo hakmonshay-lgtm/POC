@@ -1,0 +1,47 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+
+  /* Cricket-inspired theme tokens */
+  --nba-green: #78be20;
+  --nba-green-700: #5a9f10;
+  --nba-bg: #f6f7f9;
+  --nba-fg: #111827;
+  --nba-card: #ffffff;
+  --nba-border: rgba(15, 23, 42, 0.12);
+  --nba-muted: rgba(17, 24, 39, 0.65);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+
+    --nba-bg: #0b0f16;
+    --nba-fg: #e5e7eb;
+    --nba-card: #0f172a;
+    --nba-border: rgba(148, 163, 184, 0.2);
+    --nba-muted: rgba(226, 232, 240, 0.65);
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), system-ui, -apple-system, Segoe UI, Roboto,
+    Arial, sans-serif;
+}
+
+/* Utility-ish base styles to match the provided comps */
+a {
+  text-underline-offset: 3px;
+}
