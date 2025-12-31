@@ -7,6 +7,7 @@ The generated app lives in `nba/`.
 ```bash
 cd nba
 npm install
+npm run db:migrate
 npm run dev
 ```
 

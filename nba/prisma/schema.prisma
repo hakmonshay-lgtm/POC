@@ -1,0 +1,244 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  MARKETING
+  LEGAL
+  ANALYST
+  ADMIN
+}
+
+enum NbaStatus {
+  DRAFT
+  SUBMITTED
+  IN_LEGAL_REVIEW
+  APPROVED
+  SCHEDULED
+  PUBLISHED
+  TERMINATED
+  COMPLETED
+  ARCHIVED
+  CANCELLED
+}
+
+enum LegalStatus {
+  DRAFT
+  IN_REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum Channel {
+  SMS
+  EMAIL
+  MEMO
+  STORE_UI
+  CARE_UI
+  SELF_SERVICE
+}
+
+enum OfferAssignmentStatus {
+  ISSUED
+  REDEEMED
+  SUPPRESSED
+  EXPIRED
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  role      Role
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  ownedNbas      Nba[]      @relation("OwnerNbas")
+  auditLogs      AuditLog[]
+  aiArtifacts    AIArtifact[]
+  legalApprovals LegalApproval[]
+}
+
+model Nba {
+  id                String    @id @default(cuid())
+  name              String    @unique
+  description       String?
+  startAt           DateTime?
+  endAt             DateTime?
+  status            NbaStatus @default(DRAFT)
+  priority          Int       @default(3)
+  arbitrationWeight Int       @default(50)
+  currentVersion    Int       @default(1)
+
+  ownerId   String
+  owner     User      @relation("OwnerNbas", fields: [ownerId], references: [id])
+  versions  NbaVersion[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model NbaVersion {
+  id          String    @id @default(cuid())
+  nbaId       String
+  version     Int
+  status      NbaStatus @default(DRAFT)
+  isMaterial  Boolean   @default(true)
+
+  // Wizard payloads (kept denormalized for diffing/versioning)
+  // NOTE: SQLite cannot use JSON defaults in DDL reliably, so these are required
+  // and must be set explicitly by the app.
+  generalDetails Json
+  audience       Json
+  action         Json
+  benefit        Json
+
+  // Legal gates the customer-facing comms for a version
+  legalStatus LegalStatus @default(DRAFT)
+  legalNotes  String?
+
+  nba        Nba           @relation(fields: [nbaId], references: [id], onDelete: Cascade)
+  templates  CommTemplate[]
+  approvals  LegalApproval[]
+  artifacts  AIArtifact[]
+  auditLogs  AuditLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([nbaId, version])
+  @@index([nbaId, version])
+}
+
+model CommTemplate {
+  id           String      @id @default(cuid())
+  nbaVersionId String
+  channel      Channel
+  name         String
+  subject      String?
+  body         String
+  tokens       Json
+  legalStatus  LegalStatus @default(DRAFT)
+
+  nbaVersion NbaVersion @relation(fields: [nbaVersionId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([nbaVersionId, channel])
+}
+
+model LegalApproval {
+  id           String      @id @default(cuid())
+  nbaVersionId String
+  reviewerId   String
+  status       LegalStatus
+  comments     String?
+  createdAt    DateTime    @default(now())
+
+  nbaVersion NbaVersion @relation(fields: [nbaVersionId], references: [id], onDelete: Cascade)
+  reviewer   User       @relation(fields: [reviewerId], references: [id], onDelete: Cascade)
+
+  @@index([nbaVersionId, status])
+}
+
+model AuditLog {
+  id           String   @id @default(cuid())
+  actorId      String
+  entityType   String
+  entityId     String
+  action       String
+  diff         Json
+  nbaVersionId String?
+  createdAt    DateTime @default(now())
+
+  actor      User        @relation(fields: [actorId], references: [id], onDelete: Cascade)
+  nbaVersion NbaVersion? @relation(fields: [nbaVersionId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId])
+  @@index([nbaVersionId, createdAt])
+}
+
+model Customer {
+  id              String   @id @default(cuid())
+  firstName       String?
+  lastName        String?
+  email           String?
+  phone           String?
+  consentSms      Boolean  @default(false)
+  consentEmail    Boolean  @default(false)
+  riskFlags       Json
+  tenureMonths    Int      @default(0)
+  purchases12mo   Int      @default(0)
+  abpEnrolled     Boolean  @default(false)
+  creditCardExpAt DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  events          Event[]
+  offerAssignments OfferAssignment[]
+  scores          ArbitrationScore[]
+}
+
+model Event {
+  id         String   @id @default(cuid())
+  customerId String
+  type       String
+  payload    Json
+  createdAt  DateTime @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId, type, createdAt])
+}
+
+model OfferAssignment {
+  id         String               @id @default(cuid())
+  customerId String
+  nbaId      String
+  status     OfferAssignmentStatus @default(ISSUED)
+  issuedAt   DateTime             @default(now())
+  redeemedAt DateTime?
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId, nbaId, status])
+}
+
+model ArbitrationScore {
+  id         String   @id @default(cuid())
+  customerId String
+  nbaId      String
+  score      Float
+  factors    Json
+  createdAt  DateTime @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId, createdAt])
+}
+
+model AIArtifact {
+  id           String   @id @default(cuid())
+  actorId      String
+  nbaVersionId String?
+  screen       String
+  promptId     String
+  modelVersion String
+  inputs       Json
+  outputs      Json
+  confidence   Float
+  guardrailFlags Json
+  createdAt    DateTime @default(now())
+
+  actor      User        @relation(fields: [actorId], references: [id], onDelete: Cascade)
+  nbaVersion NbaVersion? @relation(fields: [nbaVersionId], references: [id], onDelete: SetNull)
+
+  @@index([nbaVersionId, screen, createdAt])
+}
+
