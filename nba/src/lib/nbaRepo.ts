@@ -5,6 +5,7 @@ import { NbaGeneralSchema, assertStartBeforeEnd, ActionSchema, BenefitSchema, Co
 import { evalAudienceRules, type CustomerRow } from "@/lib/audience";
 import { writeAuditLog } from "@/lib/audit";
 import type { Session } from "@/lib/session";
+import { createTwoFilesPatch } from "diff";
 
 export type NbaRow = {
   id: string;
@@ -19,16 +20,38 @@ export type NbaRow = {
   current_version: number;
   created_at: string;
   updated_at: string;
+  // denormalized for list views (may be null)
+  audience_size?: number | null;
+  action_type?: string | null;
 };
 
 export function listNbas() {
   const db = getDb();
+  // Best-effort expiry update (MVP): flip to Expired once past end_date.
+  // We do this on read to avoid requiring a background worker.
+  const nowIso = dbNowIso();
+  db.prepare(
+    `
+      UPDATE nba
+      SET status='Expired', updated_at=?
+      WHERE status IN ('Approved', 'In Testing', 'Scheduled', 'Publishing', 'Published')
+        AND end_date < ?
+    `,
+  ).run(nowIso, nowIso);
+
   return db
     .prepare(
       `
-      SELECT id, name, description, start_date, end_date, status, owner_id, priority, arbitration_weight, current_version, created_at, updated_at
-      FROM nba
-      ORDER BY updated_at DESC
+      SELECT
+        n.id, n.name, n.description, n.start_date, n.end_date, n.status, n.owner_id, n.priority, n.arbitration_weight, n.current_version, n.created_at, n.updated_at,
+        a.size_estimate as audience_size,
+        ad.type as action_type
+      FROM nba n
+      LEFT JOIN audience a
+        ON a.nba_id = n.id AND a.version = n.current_version
+      LEFT JOIN action_def ad
+        ON ad.nba_id = n.id AND ad.version = n.current_version
+      ORDER BY n.updated_at DESC
     `,
     )
     .all() as NbaRow[];
@@ -154,6 +177,34 @@ function isMaterialChangeForApproved(fieldGroup: "general" | "audience" | "actio
   return fieldGroup !== "general";
 }
 
+function upsertNbaVersionSnapshot(args: {
+  nbaId: string;
+  version: number;
+  session: Session;
+  changeSummary: string;
+  materialChange: 0 | 1;
+}) {
+  const db = getDb();
+  const now = dbNowIso();
+  const snapshot = buildSnapshot(args.nbaId, args.version);
+  const existing = db.prepare("SELECT id FROM nba_version WHERE nba_id=? AND version=?").get(args.nbaId, args.version) as { id: string } | undefined;
+  if (existing?.id) {
+    db.prepare("UPDATE nba_version SET snapshot_json=?, material_change=?, change_summary=? WHERE id=?").run(
+      JSON.stringify(snapshot),
+      args.materialChange,
+      args.changeSummary,
+      existing.id,
+    );
+    return;
+  }
+  db.prepare(
+    `
+      INSERT INTO nba_version (id, nba_id, version, snapshot_json, material_change, change_summary, created_by, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `,
+  ).run(nanoid(), args.nbaId, args.version, JSON.stringify(snapshot), args.materialChange, args.changeSummary, args.session.userId, now);
+}
+
 function bumpVersionIfNeeded(nba: NbaRow, session: Session, fieldGroup: "general" | "audience" | "action" | "benefit" | "comms") {
   const material = nba.status !== "Draft" && isMaterialChangeForApproved(fieldGroup);
   if (!material) return nba.current_version;
@@ -188,6 +239,14 @@ function bumpVersionIfNeeded(nba: NbaRow, session: Session, fieldGroup: "general
     entityId: nba.id,
     before: { currentVersion: nba.current_version, status: nba.status },
     after: { currentVersion: nextVersion, status: "In Legal Review" },
+  });
+
+  upsertNbaVersionSnapshot({
+    nbaId: nba.id,
+    version: nextVersion,
+    session,
+    changeSummary: `Material change: ${fieldGroup}`,
+    materialChange: 1,
   });
   return nextVersion;
 }
@@ -275,6 +334,14 @@ export function updateGeneral(nbaId: string, input: unknown, session: Session) {
     after,
   });
 
+  upsertNbaVersionSnapshot({
+    nbaId,
+    version: nextVersion,
+    session,
+    changeSummary: "Updated general details",
+    materialChange: 0,
+  });
+
   return { nba: after, version: nextVersion };
 }
 
@@ -320,6 +387,14 @@ export function upsertAudience(nbaId: string, rulesInput: unknown, session: Sess
     entityId: `${nbaId}@v${version}`,
     before: existing ? JSON.parse(existing.rules_json) : null,
     after: rules,
+  });
+
+  upsertNbaVersionSnapshot({
+    nbaId,
+    version,
+    session,
+    changeSummary: "Updated audience",
+    materialChange: 0,
   });
 
   return { version, sizeEstimate: eligible.length, sampleCustomerIds: eligible.slice(0, 20).map((c) => c.id) };
@@ -391,6 +466,14 @@ export function upsertAction(nbaId: string, actionInput: unknown, session: Sessi
         }
       : null,
     after: parsed,
+  });
+
+  upsertNbaVersionSnapshot({
+    nbaId,
+    version,
+    session,
+    changeSummary: "Updated action",
+    materialChange: 0,
   });
 
   return { version };
@@ -478,6 +561,14 @@ export function upsertBenefit(nbaId: string, benefitInput: unknown, session: Ses
         }
       : null,
     after: parsed,
+  });
+
+  upsertNbaVersionSnapshot({
+    nbaId,
+    version,
+    session,
+    changeSummary: "Updated benefit",
+    materialChange: 0,
   });
 
   return { version };
@@ -573,7 +664,54 @@ export function upsertComms(nbaId: string, commsInput: unknown, session: Session
   });
 
   tx();
+  upsertNbaVersionSnapshot({
+    nbaId,
+    version,
+    session,
+    changeSummary: "Updated communication templates",
+    materialChange: 0,
+  });
   return { version };
+}
+
+export function listNbaVersions(nbaId: string) {
+  const db = getDb();
+  return db
+    .prepare(
+      `
+      SELECT id, nba_id, version, material_change, change_summary, created_by, created_at
+      FROM nba_version
+      WHERE nba_id=?
+      ORDER BY version DESC
+    `,
+    )
+    .all(nbaId) as Array<{
+    id: string;
+    nba_id: string;
+    version: number;
+    material_change: 0 | 1;
+    change_summary: string | null;
+    created_by: string;
+    created_at: string;
+  }>;
+}
+
+export function getNbaVersionSnapshot(nbaId: string, version: number) {
+  const db = getDb();
+  const row = db.prepare("SELECT snapshot_json FROM nba_version WHERE nba_id=? AND version=?").get(nbaId, version) as
+    | { snapshot_json: string }
+    | undefined;
+  if (!row) return null;
+  return JSON.parse(row.snapshot_json) as unknown;
+}
+
+export function diffNbaVersions(nbaId: string, fromVersion: number, toVersion: number) {
+  const from = getNbaVersionSnapshot(nbaId, fromVersion);
+  const to = getNbaVersionSnapshot(nbaId, toVersion);
+  if (!from || !to) return null;
+  const a = JSON.stringify(from, null, 2);
+  const b = JSON.stringify(to, null, 2);
+  return createTwoFilesPatch(`v${fromVersion}`, `v${toVersion}`, a, b, "", "", { context: 3 });
 }
 
 export function listAuditForEntity(entityType: string, entityId: string) {
@@ -674,6 +812,43 @@ export function legalDecision(templateId: string, decision: "Approved" | "Reject
     before,
     after: { ...before, legal_status: decision, legal_reviewer_id: session.userId, legal_notes: comments, updated_at: now },
   });
+
+  // If this decision affects the NBA's current version, update the NBA status to match:
+  // - any template Rejected => NBA Rejected
+  // - all templates Approved => NBA Approved
+  // - otherwise => In Legal Review
+  const nba = getNbaById(tpl.nba_id);
+  if (!nba) return;
+  if (nba.current_version !== tpl.version) return;
+
+  const counts = db
+    .prepare(
+      `
+      SELECT
+        SUM(CASE WHEN legal_status='Rejected' THEN 1 ELSE 0 END) as rejected_count,
+        SUM(CASE WHEN legal_status='Approved' THEN 1 ELSE 0 END) as approved_count,
+        COUNT(1) as total_count
+      FROM comm_template
+      WHERE nba_id=? AND version=?
+    `,
+    )
+    .get(tpl.nba_id, tpl.version) as { rejected_count: number; approved_count: number; total_count: number };
+
+  const nextStatus =
+    (counts.rejected_count ?? 0) > 0 ? "Rejected" : (counts.total_count ?? 0) > 0 && (counts.approved_count ?? 0) === (counts.total_count ?? 0) ? "Approved" : "In Legal Review";
+
+  if (nextStatus !== nba.status && ["Submitted", "In Legal Review", "Rejected", "Approved"].includes(nba.status)) {
+    db.prepare("UPDATE nba SET status=?, updated_at=? WHERE id=?").run(nextStatus, dbNowIso(), tpl.nba_id);
+    writeAuditLog({
+      actorId: session.userId,
+      actorRole: session.role,
+      action: "STATUS_TRANSITION",
+      entityType: "NBA",
+      entityId: tpl.nba_id,
+      before: { status: nba.status },
+      after: { status: nextStatus },
+    });
+  }
 }
 
 export function transitionNba(nbaId: string, nextStatus: string, session: Session) {
@@ -691,5 +866,158 @@ export function transitionNba(nbaId: string, nextStatus: string, session: Sessio
     before,
     after: { status: nextStatus },
   });
+}
+
+function uniqueCopyName(baseName: string) {
+  const db = getDb();
+  const base = `Copy of ${baseName}`.slice(0, 120);
+  const exists = (name: string) => {
+    const row = db.prepare("SELECT id FROM nba WHERE name=?").get(name) as { id: string } | undefined;
+    return Boolean(row?.id);
+  };
+  if (!exists(base)) return base;
+  for (let i = 2; i < 200; i++) {
+    const candidate = `${base} (${i})`.slice(0, 120);
+    if (!exists(candidate)) return candidate;
+  }
+  return `${base}-${nanoid(6)}`.slice(0, 120);
+}
+
+export function cloneNba(nbaId: string, session: Session) {
+  const db = getDb();
+  const src = getLatestSnapshot(nbaId);
+  if (!src) throw new Error("NBA not found");
+
+  const now = dbNowIso();
+  const newId = nanoid();
+  const newName = uniqueCopyName(src.nba.name);
+
+  const nba: NbaRow = {
+    id: newId,
+    name: newName,
+    description: src.nba.description ?? "",
+    start_date: src.nba.start_date,
+    end_date: src.nba.end_date,
+    status: "Draft",
+    owner_id: session.userId,
+    priority: src.nba.priority,
+    arbitration_weight: src.nba.arbitration_weight,
+    current_version: 1,
+    created_at: now,
+    updated_at: now,
+  };
+
+  const tx = db.transaction(() => {
+    db.prepare(
+      `
+      INSERT INTO nba (id, name, description, start_date, end_date, status, owner_id, priority, arbitration_weight, current_version, created_at, updated_at)
+      VALUES (@id, @name, @description, @start_date, @end_date, @status, @owner_id, @priority, @arbitration_weight, @current_version, @created_at, @updated_at)
+    `,
+    ).run(nba);
+
+    if (src.audience) {
+      db.prepare("INSERT INTO audience (id, nba_id, version, rules_json, size_estimate, updated_at) VALUES (?, ?, ?, ?, ?, ?)").run(
+        nanoid(),
+        newId,
+        1,
+        JSON.stringify(src.audience.rules),
+        src.audience.sizeEstimate ?? 0,
+        now,
+      );
+    }
+    if (src.action) {
+      db.prepare(
+        "INSERT INTO action_def (id, nba_id, version, type, completion_event, sale_channels_json, offer_priority, max_offers_per_customer, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      ).run(
+        nanoid(),
+        newId,
+        1,
+        src.action.type,
+        src.action.completionEvent,
+        JSON.stringify(src.action.saleChannels ?? []),
+        src.action.offerPriority ?? 5,
+        src.action.maxOffersPerCustomer ?? 1,
+        now,
+      );
+    }
+    if (src.benefit) {
+      db.prepare(
+        "INSERT INTO benefit (id, nba_id, version, type, value_number, value_unit, cap_number, threshold_json, stackability_json, exclusions_json, redemption_logic, description, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      ).run(
+        nanoid(),
+        newId,
+        1,
+        src.benefit.type,
+        src.benefit.valueNumber,
+        src.benefit.valueUnit,
+        src.benefit.capNumber,
+        JSON.stringify(src.benefit.threshold ?? {}),
+        JSON.stringify(src.benefit.stackability ?? { allowed: false, exclusivityTags: [] }),
+        JSON.stringify(src.benefit.exclusions ?? { excludedOfferIds: [] }),
+        src.benefit.redemptionLogic,
+        src.benefit.description,
+        now,
+      );
+    }
+    for (const t of src.comms ?? []) {
+      // approvals are removed on clone; everything returns to In Review
+      db.prepare(
+        "INSERT INTO comm_template (id, nba_id, version, channel, subject, body, tokens_json, legal_status, legal_reviewer_id, legal_notes, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      ).run(
+        nanoid(),
+        newId,
+        1,
+        t.channel,
+        t.subject ?? "",
+        t.body ?? "",
+        JSON.stringify(t.tokens ?? []),
+        "In Review",
+        null,
+        "",
+        now,
+      );
+    }
+
+    const snapshot = buildSnapshot(newId, 1) ?? { nba, version: 1, audience: null, action: null, benefit: null, comms: [] };
+    db.prepare(
+      `
+      INSERT INTO nba_version (id, nba_id, version, snapshot_json, material_change, change_summary, created_by, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `,
+    ).run(nanoid(), newId, 1, JSON.stringify(snapshot), 0, `Cloned from ${nbaId}`, session.userId, now);
+
+    writeAuditLog({
+      actorId: session.userId,
+      actorRole: session.role,
+      action: "CLONE_NBA",
+      entityType: "NBA",
+      entityId: newId,
+      before: { sourceNbaId: nbaId, sourceVersion: src.version },
+      after: { nbaId: newId, name: newName, status: "Draft", version: 1 },
+    });
+  });
+
+  tx();
+  return nba;
+}
+
+export function deleteNba(nbaId: string, session: Session) {
+  const db = getDb();
+  const snapshot = getLatestSnapshot(nbaId);
+  if (!snapshot) throw new Error("NBA not found");
+
+  const tx = db.transaction(() => {
+    writeAuditLog({
+      actorId: session.userId,
+      actorRole: session.role,
+      action: "DELETE_NBA",
+      entityType: "NBA",
+      entityId: nbaId,
+      before: snapshot,
+      after: null,
+    });
+    db.prepare("DELETE FROM nba WHERE id=?").run(nbaId);
+  });
+  tx();
 }
 

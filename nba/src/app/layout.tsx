@@ -32,35 +32,49 @@ export default async function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <div className="min-h-screen bg-[var(--background)]">
-          <div className="border-b border-zinc-200/60 bg-[var(--cw-green)]">
-            <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
+          <div className="border-b border-zinc-800 bg-black">
+            <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
               <div className="flex items-center gap-6">
-                <Link href="/" className="flex items-center gap-2 text-sm font-extrabold tracking-tight text-white">
-                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-white/15 ring-1 ring-white/20">
-                    <span className="text-base leading-none">N</span>
-                  </span>
-                  <span>NBA Studio</span>
+                <Link href="/" className="flex items-center gap-3 text-white">
+                  <div className="leading-none">
+                    <div className="text-2xl font-extrabold tracking-tight">cricket</div>
+                    <div className="-mt-1 text-sm font-semibold tracking-tight text-white/90">wireless</div>
+                  </div>
                 </Link>
-                <nav className="flex items-center gap-4 text-sm text-white/90">
-                  <Link className="hover:text-white" href="/nbas">
-                    NBAs
-                  </Link>
-                  <Link className="hover:text-white" href="/analytics">
-                    Analytics
-                  </Link>
-                  <Link className="hover:text-white" href="/legal">
-                    Legal
-                  </Link>
-                </nav>
+                <div className="hidden items-center gap-3 md:flex">
+                  <div className="text-sm text-white/90">
+                    <span className="font-semibold text-white">Welcome,</span> {session.userId}
+                  </div>
+                  <span className="rounded-full bg-[var(--cw-green)] px-3 py-1 text-xs font-semibold text-white uppercase tracking-wide">
+                    {session.role}
+                  </span>
+                </div>
               </div>
-              <div className="flex items-center gap-3">
-                <div className="text-xs text-white/90">
-                  Role: <span className="font-semibold text-white">{session.role}</span>
+
+              <div className="flex items-center gap-4 text-sm text-white/90">
+                <div className="hidden items-center gap-4 md:flex">
+                  <div className="font-semibold text-white">Promotion</div>
+                  <div className="h-5 w-px bg-white/30" />
+                  <nav className="flex items-center gap-4">
+                    <Link className="hover:text-white" href="/nbas">
+                      Next Best Action
+                    </Link>
+                    <Link className="hover:text-white" href="/analytics">
+                      Analytics
+                    </Link>
+                    <Link className="hover:text-white" href="/legal">
+                      Legal
+                    </Link>
+                  </nav>
                 </div>
                 <RoleSwitcher initialRole={session.role} initialUserId={session.userId} />
+                <button type="button" className="text-white/80 hover:text-white">
+                  Logout
+                </button>
               </div>
             </div>
           </div>
+
           <div className="mx-auto max-w-6xl px-4 py-8">{children}</div>
         </div>
       </body>
