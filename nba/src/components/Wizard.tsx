@@ -7,7 +7,9 @@ import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
 import { errorMessage } from "@/lib/errors";
+import { NbaAssistant } from "@/components/NbaAssistant";
 
 type Channel = "SMS" | "Email" | "Memo";
 
@@ -75,9 +77,6 @@ export function Wizard({ initialNbaId }: { initialNbaId?: string }) {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-
-  const [aiPrompt, setAiPrompt] = useState("");
-  const [aiOut, setAiOut] = useState<unknown>(null);
 
   const generalDefaults = useMemo(() => {
     const now = new Date();
@@ -308,17 +307,14 @@ export function Wizard({ initialNbaId }: { initialNbaId?: string }) {
     }
   }
 
-  async function ai(screen: string) {
-    setAiOut(null);
-    setError(null);
-    const res = await fetch("/api/ai/suggest", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ screen, prompt: aiPrompt, context: { nbaId } }),
-    });
-    const data = await res.json();
-    setAiOut(data);
-  }
+  const aiScreen = useMemo(() => {
+    if (step === 1) return "general";
+    if (step === 2) return "audience";
+    if (step === 3) return "action";
+    if (step === 4) return "benefit";
+    if (step === 5) return "comms";
+    return "summary";
+  }, [step]);
 
   async function transition(nextStatus: string) {
     if (!nbaId) return;
@@ -338,6 +334,57 @@ export function Wizard({ initialNbaId }: { initialNbaId?: string }) {
     } finally {
       setSaving(false);
     }
+  }
+
+  const readiness = useMemo(() => {
+    const s = snapshot;
+    const nba = s?.nba;
+    const items: Array<{ key: string; label: string; ok: boolean; detail?: string }> = [];
+
+    const hasNba = Boolean(nba?.id);
+    items.push({ key: "nba", label: "NBA created", ok: hasNba });
+    items.push({ key: "name", label: "Unique name (validated on save)", ok: Boolean(nba?.name?.trim()?.length) });
+    items.push({
+      key: "dates",
+      label: "Start date is before end date",
+      ok: nba ? Date.parse(nba.start_date) < Date.parse(nba.end_date) : false,
+      detail: nba ? `${new Date(nba.start_date).toLocaleDateString()} → ${new Date(nba.end_date).toLocaleDateString()}` : undefined,
+    });
+    items.push({ key: "audience", label: "Audience configured (≥1 inclusion rule)", ok: Boolean(s?.audience?.rules) });
+    items.push({
+      key: "audienceEstimate",
+      label: "Audience size estimate computed",
+      ok: typeof s?.audience?.sizeEstimate === "number" && s.audience.sizeEstimate >= 0,
+      detail: typeof s?.audience?.sizeEstimate === "number" ? `${s.audience.sizeEstimate.toLocaleString()} customers` : undefined,
+    });
+    items.push({ key: "actionType", label: "Action type selected", ok: Boolean(s?.action?.type) });
+    items.push({ key: "actionChannels", label: "Sale channel(s) selected", ok: Boolean(s?.action?.saleChannels?.length) });
+    items.push({ key: "benefit", label: "Benefit configured (value + cap)", ok: Boolean(s?.benefit?.type && s.benefit.valueNumber > 0 && s.benefit.capNumber > 0) });
+    items.push({ key: "comms", label: "At least one channel enabled", ok: Boolean(s?.comms?.length) });
+    items.push({
+      key: "templates",
+      label: "Templates present for enabled channels",
+      ok: Boolean(s?.comms?.length && s.comms.every((t) => (t.body ?? "").trim().length >= 3)),
+    });
+    const legalOk = Boolean(s?.comms?.length) && s!.comms!.every((t) => t.legalStatus === "Approved");
+    items.push({
+      key: "legal",
+      label: "Legal approved all customer-facing templates",
+      ok: legalOk,
+      detail: s?.comms?.length ? s.comms.map((t) => `${t.channel}: ${t.legalStatus}`).join(" · ") : undefined,
+    });
+
+    const okCount = items.filter((x) => x.ok).length;
+    const score = Math.round((okCount / items.length) * 100);
+    const canActivate = legalOk;
+    return { items, score, canActivate };
+  }, [snapshot]);
+
+  async function submitForLegalReview() {
+    if (!nbaId) return;
+    // Draft -> Submitted -> In Legal Review (keeps the explicit lifecycle steps)
+    await transition("Submitted");
+    await transition("In Legal Review");
   }
 
   return (
@@ -388,31 +435,6 @@ export function Wizard({ initialNbaId }: { initialNbaId?: string }) {
           </CardBody>
         </Card>
       ) : null}
-
-      <Card>
-        <CardHeader title="AI Assist (MVP)" subtitle="Heuristic suggestions + audit logging (stubbed). Use as a placeholder for LLM integration." />
-        <CardBody>
-          <div className="flex flex-col gap-3 md:flex-row md:items-end">
-            <div className="flex-1">
-              <div className="mb-1 text-xs font-medium text-zinc-700">Prompt</div>
-              <Input value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)} placeholder="e.g. Propose a high-impact NBA name and dates for a Q1 retention campaign" />
-            </div>
-            <div className="flex gap-2">
-              <Button variant="secondary" onClick={() => ai(steps[step - 1]!.title.toLowerCase().includes("general") ? "general" : step === 2 ? "audience" : step === 3 ? "action" : step === 4 ? "benefit" : step === 5 ? "comms" : "summary")}>
-                Get suggestions
-              </Button>
-              <Button variant="ghost" onClick={() => setAiOut(null)}>
-                Clear
-              </Button>
-            </div>
-          </div>
-          {aiOut ? (
-            <pre className="mt-3 max-h-64 overflow-auto rounded-md bg-zinc-950 p-3 text-xs text-zinc-100">{JSON.stringify(aiOut, null, 2)}</pre>
-          ) : (
-            <div className="mt-3 text-xs text-zinc-500">Suggestions will appear here.</div>
-          )}
-        </CardBody>
-      </Card>
 
       {step === 1 ? (
         <Card>
@@ -713,6 +735,33 @@ export function Wizard({ initialNbaId }: { initialNbaId?: string }) {
           <CardBody>
             <div className="grid gap-4">
               <div className="rounded-md border border-zinc-200 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <div className="text-sm font-medium text-zinc-900">Readiness checklist</div>
+                    <div className="mt-1 text-xs text-zinc-500">Score: {readiness.score}/100</div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-zinc-500">Current status:</span>
+                    <span className="text-sm font-medium text-zinc-900">{snapshot?.nba?.status ?? "—"}</span>
+                  </div>
+                </div>
+                <div className="mt-3 divide-y divide-zinc-100 rounded-md border border-zinc-200">
+                  {readiness.items.map((it) => (
+                    <div key={it.key} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm">
+                      <div className="text-zinc-800">{it.label}</div>
+                      <div className="flex items-center gap-2">
+                        {it.detail ? <div className="text-xs text-zinc-500">{it.detail}</div> : null}
+                        <Badge color={it.ok ? "green" : "yellow"}>{it.ok ? "OK" : "Needs attention"}</Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-2 text-xs text-zinc-500">
+                  Tip: Legal approvals happen in <Link className="underline" href="/legal">Legal Inbox</Link>.
+                </div>
+              </div>
+
+              <div className="rounded-md border border-zinc-200 p-4">
                 <div className="text-sm font-medium text-zinc-900">Read-only summary</div>
                 <pre className="mt-3 max-h-96 overflow-auto rounded-md bg-zinc-950 p-3 text-xs text-zinc-100">{JSON.stringify(snapshot, null, 2)}</pre>
               </div>
@@ -725,17 +774,36 @@ export function Wizard({ initialNbaId }: { initialNbaId?: string }) {
                   <Button variant="secondary" onClick={() => setStep(5)}>
                     Back
                   </Button>
-                  <Button variant="secondary" onClick={() => transition("Submitted")} disabled={saving}>
+                  <Button
+                    variant="secondary"
+                    onClick={() => void submitForLegalReview()}
+                    disabled={saving || !nbaId || !snapshot?.nba || !["Draft", "Rejected"].includes(snapshot.nba.status)}
+                  >
                     Submit for Legal Review
                   </Button>
-                  <Button variant="secondary" onClick={() => transition("Approved")} disabled={saving}>
-                    Mark Approved (demo)
+                  <Button
+                    variant="secondary"
+                    onClick={() => transition("In Testing")}
+                    disabled={saving || !readiness.canActivate || snapshot?.nba?.status !== "Approved"}
+                  >
+                    Move to Testing
                   </Button>
-                  <Button variant="secondary" onClick={() => transition("Scheduled")} disabled={saving}>
-                    Schedule (requires Legal Approved)
+                  <Button
+                    variant="secondary"
+                    onClick={() => transition("Scheduled")}
+                    disabled={saving || !readiness.canActivate || !["Approved", "In Testing"].includes(snapshot?.nba?.status ?? "")}
+                  >
+                    Schedule
                   </Button>
-                  <Button onClick={() => transition("Published")} disabled={saving}>
-                    Publish (requires Legal Approved)
+                  <Button
+                    variant="secondary"
+                    onClick={() => transition("Publishing")}
+                    disabled={saving || !readiness.canActivate || snapshot?.nba?.status !== "Scheduled"}
+                  >
+                    Start Publishing
+                  </Button>
+                  <Button onClick={() => transition("Published")} disabled={saving || !readiness.canActivate || snapshot?.nba?.status !== "Publishing"}>
+                    Publish
                   </Button>
                 </div>
               </div>
@@ -743,6 +811,8 @@ export function Wizard({ initialNbaId }: { initialNbaId?: string }) {
           </CardBody>
         </Card>
       ) : null}
+
+      <NbaAssistant screen={aiScreen} context={{ nbaId, step, snapshot }} />
     </div>
   );
 }

@@ -7,14 +7,17 @@ const allowed: Record<string, string[]> = {
   Draft: ["Submitted", "Cancelled", "Archived"],
   Submitted: ["In Legal Review", "Cancelled"],
   "In Legal Review": ["Approved", "Rejected"],
-  Approved: ["Scheduled", "Archived"],
-  Scheduled: ["Published", "Cancelled"],
-  Published: ["Terminated", "Completed"],
+  Rejected: ["Draft", "Archived", "Cancelled"],
+  Approved: ["In Testing", "Scheduled", "Archived", "Cancelled"],
+  "In Testing": ["Approved", "Scheduled", "Cancelled"],
+  Scheduled: ["Publishing", "Cancelled", "Archived"],
+  Publishing: ["Published", "Cancelled"],
+  Published: ["Terminated", "Completed", "Expired"],
+  Expired: ["Archived", "Completed"],
   Terminated: ["Completed", "Archived"],
   Completed: ["Archived"],
   Archived: [],
   Cancelled: ["Archived"],
-  Rejected: ["Draft", "Archived"],
 };
 
 function isAllowed(from: string, to: string) {
@@ -35,7 +38,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   }
 
   // Legal approval gate before activation.
-  if (["Scheduled", "Published"].includes(nextStatus)) {
+  if (["Scheduled", "Publishing", "Published"].includes(nextStatus)) {
     const db = getDb();
     const pending = db
       .prepare("SELECT COUNT(1) as c FROM comm_template WHERE nba_id=? AND version=? AND legal_status != 'Approved'")

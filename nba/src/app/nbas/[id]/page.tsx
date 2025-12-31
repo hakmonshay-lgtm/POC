@@ -4,6 +4,7 @@ import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SimulateIssue } from "@/components/SimulateIssue";
+import { NbaVersionHistory } from "@/components/NbaVersionHistory";
 
 type BadgeColor = "zinc" | "green" | "yellow" | "red" | "blue";
 
@@ -122,6 +123,8 @@ export default async function NbaDetailPage(props: { params: Promise<{ id: strin
           </CardBody>
         </Card>
       </div>
+
+      <NbaVersionHistory nbaId={id} />
     </div>
   );
 }
