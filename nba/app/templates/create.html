@@ -1,0 +1,284 @@
+{% extends "base.html" %}
+{% block content %}
+
+<form method="post" action="/create">
+  <input type="hidden" name="action" value="save" data-form-action />
+
+  <div class="card card--panel">
+    <div class="card__head">
+      <div class="card__title">Request Configurations</div>
+      <div class="card__actions">
+        <button class="link" type="button">Duplicate</button>
+        <span class="muted">|</span>
+        <button class="link link--muted" type="button" disabled>Remove</button>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Step 1 -->
+    <div class="step" data-step>
+      <button class="step__toggle" type="button" data-step-toggle>
+        <span class="caret">▾</span>
+        <span class="step__label">Step 1: Add General Details</span>
+      </button>
+
+      <div class="step__body" data-step-body>
+        <div class="card card--inner">
+          <div class="field">
+            <label class="label">NBA Name</label>
+            <input class="input" name="name" value="{{ draft.name }}" maxlength="75" placeholder="Enter name here" data-count="name" />
+            <div class="count"><span data-count-value="name">{{ draft.name|length }}</span>/75</div>
+          </div>
+
+          <div class="field">
+            <label class="label">NBA Description</label>
+            <input class="input" name="description" value="{{ draft.description }}" maxlength="75" placeholder="Enter description here" data-count="description" />
+            <div class="count"><span data-count-value="description">{{ draft.description|length }}</span>/75</div>
+          </div>
+
+          <div class="grid grid--2">
+            <div class="field">
+              <label class="label">Effective Date</label>
+              <div class="inputwrap">
+                <input class="input" type="date" name="effective_date" value="{{ draft.effective_date }}" />
+                <span class="icon">📅</span>
+              </div>
+            </div>
+            <div class="field">
+              <label class="label">Expiration Date</label>
+              <div class="inputwrap">
+                <input class="input" type="date" name="expiration_date" value="{{ draft.expiration_date }}" />
+                <span class="icon">📅</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Step 2 -->
+    <div class="step" data-step>
+      <button class="step__toggle" type="button" data-step-toggle>
+        <span class="caret">▾</span>
+        <span class="step__label">Step 2: Define Audience</span>
+        {% if customers_estimate is not none %}
+          <span class="badge">{{ "{:,}".format(customers_estimate) }} Customer (Est.)</span>
+        {% endif %}
+      </button>
+
+      <div class="step__body" data-step-body>
+        <div class="audience">
+          <div class="audience__left">
+            <div class="mini-panel">
+              <div class="mini-panel__title">Customer</div>
+              <button class="mini-row" type="button" disabled><span>Type</span><span class="plus">+</span></button>
+              <button class="mini-row" type="button" disabled><span>Status</span><span class="plus">+</span></button>
+              <button class="mini-row" type="button" disabled><span>Multi-line</span><span class="plus">+</span></button>
+              <button class="mini-row" type="button" disabled><span>Tenure</span><span class="plus">+</span></button>
+              <button class="mini-row mini-row--active" type="button"><span>Auto-bill Pay</span><span class="plus">+</span></button>
+              <button class="mini-row mini-row--active" type="button"><span>Credit Card Expiry+</span><span class="plus">+</span></button>
+              <button class="mini-row" type="button" disabled><span>Upload List</span><span class="plus">+</span></button>
+            </div>
+
+            <div class="mini-panel" style="margin-top: 12px;">
+              <div class="mini-panel__title">Activity History</div>
+              <button class="mini-row" type="button" disabled><span>Payment History</span><span class="plus">+</span></button>
+              <button class="mini-row" type="button" disabled><span>Purchase History</span><span class="plus">+</span></button>
+            </div>
+          </div>
+
+          <div class="audience__main">
+            <div class="card card--inner">
+              <div class="innerhead">
+                <div class="innerhead__title">Auto-bill pay</div>
+                <button class="link link--muted" type="button">Remove</button>
+              </div>
+              <div class="subhead">Enrolled for Auto-bill Pay</div>
+
+              <div class="seg">
+                <label class="seg__opt">
+                  <input type="radio" name="enrolled_autobill_pay" value="yes" {% if draft.enrolled_autobill_pay == 'yes' %}checked{% endif %} />
+                  <span>Yes</span>
+                </label>
+                <label class="seg__opt">
+                  <input type="radio" name="enrolled_autobill_pay" value="no" {% if draft.enrolled_autobill_pay == 'no' %}checked{% endif %} />
+                  <span>No</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="card card--inner" style="margin-top: 14px;">
+              <div class="innerhead">
+                <div class="innerhead__title">Credit Card Expiry</div>
+                <button class="link link--muted" type="button">Remove</button>
+              </div>
+              <div class="subhead">Number of Days</div>
+              <select class="select" name="credit_card_expiry_days">
+                {% set days = draft.credit_card_expiry_days %}
+                <option value="" {% if not days %}selected{% endif %}>Select</option>
+                <option value="30" {% if days == '30' %}selected{% endif %}>30 Days</option>
+                <option value="45" {% if days == '45' %}selected{% endif %}>45 Days</option>
+                <option value="60" {% if days == '60' %}selected{% endif %}>60 Days</option>
+                <option value="90" {% if days == '90' %}selected{% endif %}>90 Days</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Step 3 -->
+    <div class="step" data-step>
+      <button class="step__toggle" type="button" data-step-toggle>
+        <span class="caret">▾</span>
+        <span class="step__label">Step 3: Define Engagement</span>
+      </button>
+
+      <div class="step__body" data-step-body>
+        <div class="engagement">
+          <div class="engagement__left">
+            <div class="mini-panel">
+              <div class="mini-panel__title">Action Required</div>
+              <button class="mini-row mini-row--active" type="button"><span>Service Action</span><span class="plus">+</span></button>
+              <button class="mini-row mini-row--active" type="button"><span>Financial Action</span><span class="plus">+</span></button>
+              <button class="mini-row mini-row--active" type="button"><span>Activation</span><span class="plus">+</span></button>
+            </div>
+
+            <div class="mini-panel" style="margin-top: 12px;">
+              <div class="mini-panel__title">Customer Benefit</div>
+              <button class="mini-row" type="button" disabled><span>Device Discount</span><span class="plus">+</span></button>
+              <button class="mini-row" type="button" disabled><span>Rate Plan Disc…</span><span class="plus">+</span></button>
+              <button class="mini-row" type="button" disabled><span>Add-on Discou…</span><span class="plus">+</span></button>
+              <button class="mini-row" type="button" disabled><span>Accessory Dis…</span><span class="plus">+</span></button>
+              <button class="mini-row" type="button" disabled><span>Free Add-on</span><span class="plus">+</span></button>
+              <button class="mini-row" type="button" disabled><span>SIM Discount</span><span class="plus">+</span></button>
+              <button class="mini-row" type="button" disabled><span>Fee Waiver</span><span class="plus">+</span></button>
+              <button class="mini-row mini-row--active" type="button"><span>Account Credit</span><span class="plus">+</span></button>
+            </div>
+
+            <div class="mini-panel" style="margin-top: 12px;">
+              <div class="mini-panel__title">Communication</div>
+              <button class="mini-row" type="button" disabled><span>SMS</span><span class="plus">+</span></button>
+              <button class="mini-row" type="button" disabled><span>MMS</span><span class="plus">+</span></button>
+              <button class="mini-row" type="button" disabled><span>Email</span><span class="plus">+</span></button>
+              <button class="mini-row mini-row--active" type="button"><span>Memo</span><span class="plus">+</span></button>
+            </div>
+          </div>
+
+          <div class="engagement__main">
+            <div class="grid grid--2">
+              <div class="card card--inner">
+                <div class="innerhead">
+                  <div class="innerhead__title">Financial Actions</div>
+                  <button class="link link--muted" type="button">Remove</button>
+                </div>
+                <div class="subhead">Select Actions</div>
+                <select class="select" name="action_required">
+                  {% set ar = draft.action_required %}
+                  <option value="" {% if not ar %}selected{% endif %}>Select</option>
+                  <option value="Update Credit Card Information" {% if ar == 'Update Credit Card Information' %}selected{% endif %}>Update Credit Card Information</option>
+                  <option value="Enroll in Auto-bill Pay" {% if ar == 'Enroll in Auto-bill Pay' %}selected{% endif %}>Enroll in Auto-bill Pay</option>
+                </select>
+              </div>
+
+              <div class="card card--inner">
+                <div class="innerhead">
+                  <div class="innerhead__title">Account Credit</div>
+                  <button class="link link--muted" type="button">Remove</button>
+                </div>
+                <div class="grid grid--2">
+                  <div class="field">
+                    <label class="label">Credit Amount</label>
+                    <input class="input" name="account_credit_amount" value="{{ draft.account_credit_amount }}" placeholder="$ 5" />
+                  </div>
+                  <div class="field">
+                    <label class="label">Recurring Period</label>
+                    <select class="select" name="recurring_period">
+                      {% set rp = draft.recurring_period %}
+                      <option value="Forever" {% if rp == 'Forever' %}selected{% endif %}>Forever</option>
+                      <option value="3 Months" {% if rp == '3 Months' %}selected{% endif %}>3 Months</option>
+                      <option value="6 Months" {% if rp == '6 Months' %}selected{% endif %}>6 Months</option>
+                      <option value="12 Months" {% if rp == '12 Months' %}selected{% endif %}>12 Months</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="field" style="margin-top: 8px;">
+                  <label class="label">Apply For</label>
+                  <div class="seg">
+                    <label class="seg__opt">
+                      <input type="radio" name="apply_for" value="Line" {% if draft.apply_for == 'Line' %}checked{% endif %} />
+                      <span>Line</span>
+                    </label>
+                    <label class="seg__opt">
+                      <input type="radio" name="apply_for" value="Account" {% if draft.apply_for == 'Account' %}checked{% endif %} />
+                      <span>Account</span>
+                    </label>
+                  </div>
+                </div>
+                <div class="field">
+                  <label class="label">Description (Optional)</label>
+                  <input class="input" placeholder="Enter Description" />
+                </div>
+              </div>
+            </div>
+
+            <div class="card card--inner" style="margin-top: 14px;">
+              <div class="innerhead">
+                <div class="innerhead__title">Memo</div>
+                <button class="link link--muted" type="button">Remove</button>
+              </div>
+              <div class="field">
+                <label class="label">Memo Text</label>
+                <textarea class="textarea" name="memo_text" maxlength="200" placeholder="Memo Text">{{ draft.memo_text }}</textarea>
+                <div class="count"><span data-count-value="memo_text">{{ draft.memo_text|length }}</span>/200</div>
+              </div>
+            </div>
+
+            <div class="card card--inner" style="margin-top: 14px;">
+              <div class="innerhead">
+                <div class="innerhead__title">Channels</div>
+                <span class="muted"> </span>
+              </div>
+              <div class="chips">
+                {% set ch = draft.channels %}
+                <label class="chip chip--toggle">
+                  <input type="checkbox" name="channels" value="Retail" {% if 'Retail' in ch %}checked{% endif %} />
+                  <span>Retail</span>
+                </label>
+                <label class="chip chip--toggle">
+                  <input type="checkbox" name="channels" value="CARE" {% if 'CARE' in ch %}checked{% endif %} />
+                  <span>CARE</span>
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footerbar">
+    <button class="btn btn--ghost" type="button">Previous</button>
+    <div class="footerbar__right">
+      <button class="btn btn--text" type="button">Cancel</button>
+      <button class="btn btn--ghost" type="submit" onclick="document.querySelector('[data-form-action]').value='save'">Save Draft</button>
+      <button
+        class="btn btn--primary"
+        type="submit"
+        {% if not (draft.is_step1_complete() and draft.is_step2_complete() and draft.is_step3_complete()) %}disabled{% endif %}
+        onclick="document.querySelector('[data-form-action]').value='review'"
+      >
+        Review
+      </button>
+    </div>
+  </div>
+</form>
+
+{% endblock %}
+
