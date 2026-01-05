@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="card card--panel">
+  <div class="reviewhead">
+    <div>
+      <div class="reviewhead__title">{{ draft.name if draft.name else "Auto-bill Pay Enrollment" }}</div>
+      <div class="reviewhead__sub">{{ draft.description if draft.description else "Next Best Action Description Here" }}</div>
+    </div>
+    <div class="reviewhead__right">
+      <div class="muted">Action Duration:</div>
+      <div class="reviewhead__dates">
+        {{ (draft.effective_date|mmddyyyy) if draft.effective_date else "01/01/2026" }} - {{ (draft.expiration_date|mmddyyyy) if draft.expiration_date else "04/01/2026" }}
+      </div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="review">
+    <div class="review__rail">
+      <div class="avatar avatar--blue">●</div>
+      <div class="rail__dot"></div>
+      <div class="avatar avatar--yellow">●</div>
+      <div class="rail__dot"></div>
+      <div class="avatar avatar--teal">●</div>
+      <div class="rail__dot"></div>
+      <div class="avatar avatar--green">●</div>
+    </div>
+
+    <div class="review__content">
+      <div class="reviewblock">
+        <div class="reviewblock__title">If Customers Matches</div>
+        <div class="reviewbox">
+          <div class="chips">
+            <span class="chip chip--light">Enrolled for Auto-bill Pay: {{ 'Yes' if draft.enrolled_autobill_pay == 'yes' else ('No' if draft.enrolled_autobill_pay == 'no' else '—') }}</span>
+            <span class="chip chip--light">Credit Card Expiry: {{ (draft.credit_card_expiry_days ~ ' Days') if draft.credit_card_expiry_days else '—' }}</span>
+          </div>
+          {% if customers_estimate is not none %}
+            <div class="muted" style="margin-top: 10px;">Estimated audience: <strong>{{ "{:,}".format(customers_estimate) }}</strong> customers</div>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="reviewblock">
+        <div class="reviewblock__title">Then Suggest Actions</div>
+        <div class="reviewbox">
+          <div class="chips">
+            <span class="chip chip--light">{{ draft.action_required if draft.action_required else "Update Credit Card Information" }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="reviewblock">
+        <div class="reviewblock__title">Offer Benefits</div>
+        <div class="reviewbox">
+          <div class="chips">
+            <span class="chip chip--light">${{ draft.account_credit_amount if draft.account_credit_amount else "5" }} Account Credit Every Month</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="reviewblock">
+        <div class="reviewblock__title">How to Communicate?</div>
+        <div class="reviewbox">
+          <div class="reviewmini">
+            <div class="reviewmini__title">Memo</div>
+            <div class="reviewmini__label">Memo Text</div>
+            <div class="reviewmini__text">
+              {{ draft.memo_text if draft.memo_text else "Customer is eligible for a $5 monthly credit upon enrollment in Auto Bill Pay." }}
+            </div>
+          </div>
+
+          <div class="reviewmini" style="margin-top: 12px;">
+            <div class="reviewmini__title">Screen Tiles</div>
+            <div class="reviewmini__label">Tile Details</div>
+            <div class="reviewmini__text">Credit Card Information Update Required.</div>
+            <div class="reviewmini__label" style="margin-top: 10px;">Channels</div>
+            <div class="chips">
+              {% if draft.channels %}
+                {% for c in draft.channels %}
+                  <span class="chip chip--light">{{ c }}</span>
+                {% endfor %}
+              {% else %}
+                <span class="chip chip--light">Retail</span>
+                <span class="chip chip--light">CARE</span>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {% if request.query_params.get('submitted') %}
+        <div class="toast">Submitted! (mock) Your NBA configuration is ready.</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<div class="footerbar">
+  <a class="btn btn--ghost" href="/create">Previous</a>
+  <div class="footerbar__right">
+    <button class="btn btn--text" type="button">Cancel</button>
+    <a class="btn btn--ghost" href="/create">Save Draft</a>
+    <form method="post" action="/submit" style="display: inline;">
+      <button class="btn btn--primary" type="submit">Submit</button>
+    </form>
+  </div>
+</div>
+
+{% endblock %}
+

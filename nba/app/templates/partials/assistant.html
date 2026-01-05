@@ -1,0 +1,28 @@
+<div class="assistant" data-assistant>
+  <div class="assistant__header">
+    <div class="assistant__sparkle">✦</div>
+    <div class="assistant__titles">
+      <div class="assistant__title">NBA Assistant</div>
+      <div class="assistant__subtitle">Ask questions about NBA.</div>
+    </div>
+    <button class="assistant__min" type="button" aria-label="Minimize" data-assistant-min>-</button>
+  </div>
+
+  <div class="assistant__body">
+    <div class="assistant__messages" data-assistant-messages>
+      <div class="assistant__empty"> </div>
+    </div>
+
+    <div class="assistant__suggestions">
+      {% for q in assistant_questions %}
+        <button class="chip chip--gray" type="button" data-suggestion="{{ q }}">{{ q }}</button>
+      {% endfor %}
+    </div>
+
+    <div class="assistant__composer">
+      <input class="assistant__input" type="text" placeholder="Ask me anything" data-assistant-input />
+      <button class="assistant__send" type="button" aria-label="Send" data-assistant-send>➤</button>
+    </div>
+  </div>
+</div>
+

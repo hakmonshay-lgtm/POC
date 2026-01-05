@@ -1,4 +1,4 @@
-## NBA – Next Best Action Marketing Tool (MVP)
+## NBA – Next Best Action (Python MVP)
 
 The generated app lives in `nba/`.
 
@@ -6,9 +6,11 @@ The generated app lives in `nba/`.
 
 ```bash
 cd nba
-npm install
-npm run dev
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Then open `http://localhost:3000`.
+Then open `http://localhost:8000`.
 

@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>NBA – Next Best Action</title>
+    <link rel="stylesheet" href="/static/css/app.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="topbar__inner">
+        <div class="brand">
+          <div class="brand__logo">
+            <span class="brand__cricket">cricket</span>
+            <span class="brand__wireless">wireless</span>
+          </div>
+          <div class="welcome">
+            <div class="welcome__title">Welcome, Topher</div>
+            <div class="pill pill--green">SUPER ADMIN</div>
+          </div>
+        </div>
+
+        <div class="topnav">
+          <a class="topnav__link" href="#">Promotion</a>
+          <span class="topnav__sep"></span>
+          <button class="btn btn--primary btn--pill" type="button">
+            <span class="btn__icon">▦</span>
+            Menu
+          </button>
+          <a class="topnav__link" href="#" style="margin-left: 14px;">Logout</a>
+        </div>
+      </div>
+    </header>
+
+    <main class="page">
+      <div class="page__header">
+        <div class="stepper">
+          <div class="stepper__track">
+            <div class="stepper__item {{ 'stepper__item--active' if step == 'create' else '' }}">
+              <div class="stepper__bar"></div>
+              <div class="stepper__label">Create NBA</div>
+            </div>
+            <div class="stepper__item {{ 'stepper__item--active' if step == 'review' else '' }}">
+              <div class="stepper__bar"></div>
+              <div class="stepper__label">Review NBA</div>
+            </div>
+          </div>
+        </div>
+        <h1 class="title">Next Best Action</h1>
+        <div class="subtitle">Add Details</div>
+      </div>
+
+      <div class="layout">
+        <section class="layout__left">
+          {% block content %}{% endblock %}
+        </section>
+
+        <aside class="layout__right">
+          {% include "partials/assistant.html" %}
+        </aside>
+      </div>
+    </main>
+
+    <script src="/static/js/app.js"></script>
+  </body>
+</html>
+
